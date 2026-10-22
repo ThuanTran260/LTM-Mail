@@ -1,0 +1,5 @@
+Đây là file đính kèm thử nghiệm gửi từ SMTP Client Java.
+Project: Hoàn thiện SMTP Client Java - Lập trình mạng.
+Tác giả: ThuanTran260
+Nội dung: Mã hóa Base64 tự động qua MIME multipart/mixed.
+Thời gian: 2026-10-22

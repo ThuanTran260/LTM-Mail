@@ -1,0 +1,14 @@
+target/
+*.class
+*.log
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.agents/
+
+# Exclude sensitive real credentials, keep example
+appsettings.json
+!appsettings.example.json
