@@ -19,20 +19,34 @@ public class LoggerUtil {
     private static final String LOG_FILE = "smtp-client.log";
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    /**
+     * SEC-06: Loại bỏ hoặc che chắn thông tin xác thực nhạy cảm (password, secret) khỏi log.
+     */
+    public static String maskSensitiveInfo(String input) {
+        if (input == null) {
+            return null;
+        }
+        String masked = input.replaceAll("(?i)(password\\s*[:=]\\s*['\"]?)([^'\"\\s,;]+)(['\"]?)", "$1********$3");
+        masked = masked.replaceAll("(?i)(pass\\s*[:=]\\s*['\"]?)([^'\"\\s,;]+)(['\"]?)", "$1********$3");
+        masked = masked.replaceAll("(?i)(secret\\s*[:=]\\s*['\"]?)([^'\"\\s,;]+)(['\"]?)", "$1********$3");
+        return masked;
+    }
+
     public static synchronized void log(String level, String message, Exception ex) {
         String time = LocalDateTime.now().format(FORMATTER);
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("[%s] [%s] %s", time, level, message));
+        String safeMessage = maskSensitiveInfo(message);
+        sb.append(String.format("[%s] [%s] %s", time, level, safeMessage));
 
         if (ex != null) {
             sb.append(System.lineSeparator())
-              .append("  ↳ ").append(ex.getClass().getSimpleName()).append(": ").append(ex.getMessage());
+              .append("  ↳ ").append(ex.getClass().getSimpleName()).append(": ").append(maskSensitiveInfo(ex.getMessage()));
             
             // Nếu có nguyên nhân lồng ghép (cause)
             Throwable cause = ex.getCause();
             if (cause != null && cause != ex) {
                 sb.append(System.lineSeparator())
-                  .append("    Caused by: ").append(cause.getClass().getSimpleName()).append(": ").append(cause.getMessage());
+                  .append("    Caused by: ").append(cause.getClass().getSimpleName()).append(": ").append(maskSensitiveInfo(cause.getMessage()));
             }
         }
 
