@@ -19,6 +19,23 @@ public class LoggerUtil {
     private static final String LOG_FILE = "smtp-client.log";
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    @FunctionalInterface
+    public interface LogListener {
+        void onLog(String timestamp, String level, String message, Exception ex, String formattedLine);
+    }
+
+    private static final java.util.List<LogListener> LISTENERS = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public static void addLogListener(LogListener listener) {
+        if (listener != null) {
+            LISTENERS.add(listener);
+        }
+    }
+
+    public static void removeLogListener(LogListener listener) {
+        LISTENERS.remove(listener);
+    }
+
     /**
      * SEC-06: Loại bỏ hoặc che chắn thông tin xác thực nhạy cảm (password, secret) khỏi log.
      */
@@ -72,6 +89,14 @@ public class LoggerUtil {
             );
         } catch (IOException e) {
             System.err.println("Không thể ghi log vào file " + LOG_FILE + ": " + e.getMessage());
+        }
+
+        // 3. Thông báo tới các LogListener (phục vụ giao diện đồ họa thời gian thực)
+        for (LogListener listener : LISTENERS) {
+            try {
+                listener.onLog(time, level, safeMessage, ex, logOutput);
+            } catch (Exception ignored) {
+            }
         }
     }
 

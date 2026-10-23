@@ -83,8 +83,14 @@ public class EmailMessageBuilder {
         }
 
         File file = new File(trimmedPath);
+        File canonicalFile = file.getCanonicalFile();
 
-        // 2. Kiểm tra file tồn tại và là file thông thường
+        // 2. Kiểm tra danh sách file nhạy cảm cần bảo vệ (Credentials, Secrets, Keys)
+        if (isSensitiveFile(file) || isSensitiveFile(canonicalFile)) {
+            throw new SecurityException("Từ chối truy cập: Không được phép đính kèm tệp tin cấu hình hoặc thông tin nhạy cảm: " + canonicalFile.getName());
+        }
+
+        // 3. Kiểm tra file tồn tại và là file thông thường
         if (!file.exists()) {
             throw new IllegalArgumentException("File đính kèm không tồn tại: " + path);
         }
@@ -95,16 +101,10 @@ public class EmailMessageBuilder {
             throw new SecurityException("Không có quyền đọc file đính kèm: " + path);
         }
 
-        // 3. Kiểm tra ranh giới thư mục dự án (Canonical Path Sandbox Boundary Check)
-        File canonicalFile = file.getCanonicalFile();
+        // 4. Kiểm tra ranh giới thư mục dự án (Canonical Path Sandbox Boundary Check)
         Path baseDirPath = new File(".").getCanonicalFile().toPath();
         if (!canonicalFile.toPath().startsWith(baseDirPath)) {
             throw new SecurityException("Cảnh báo Path Traversal: Tệp tin nằm ngoài phạm vi thư mục cho phép: " + path);
-        }
-
-        // 4. Kiểm tra danh sách file nhạy cảm cần bảo vệ (Credentials, Secrets, Keys)
-        if (isSensitiveFile(canonicalFile)) {
-            throw new SecurityException("Từ chối truy cập: Không được phép đính kèm tệp tin cấu hình hoặc thông tin nhạy cảm: " + canonicalFile.getName());
         }
 
         // 5. Kiểm tra giới hạn kích thước file (DoS / OutOfMemoryError defense)
@@ -165,6 +165,8 @@ public class EmailMessageBuilder {
                 session,
                 config.getFrom(),
                 config.getTo(),
+                config.getCc(),
+                config.getBcc(),
                 config.getSubject(),
                 config.getBody(),
                 attachments
@@ -179,16 +181,47 @@ public class EmailMessageBuilder {
             String bodyHtml,
             List<File> attachments
     ) throws Exception {
+        return createMimeMessage(session, from, to, null, null, subject, bodyHtml, attachments);
+    }
+
+    public static MimeMessage createMimeMessage(
+            Session session,
+            String from,
+            String to,
+            String cc,
+            String bcc,
+            String subject,
+            String bodyHtml,
+            List<File> attachments
+    ) throws Exception {
         // SEC-04: Kiểm tra và ngăn chặn CRLF Injection trong các trường Header
+        if (from == null || from.trim().isEmpty()) {
+            throw new IllegalArgumentException("Địa chỉ người gửi (From) không được để trống!");
+        }
+        if (to == null || to.trim().isEmpty()) {
+            throw new IllegalArgumentException("Địa chỉ người nhận (To) không được để trống!");
+        }
         validateHeaderValue("From", from);
         validateHeaderValue("To", to);
+        if (cc != null && !cc.trim().isEmpty()) {
+            validateHeaderValue("Cc", cc);
+        }
+        if (bcc != null && !bcc.trim().isEmpty()) {
+            validateHeaderValue("Bcc", bcc);
+        }
         validateHeaderValue("Subject", subject);
 
         MimeMessage message = new MimeMessage(session);
 
-        // 1. Địa chỉ người gửi & người nhận
-        message.setFrom(new InternetAddress(from));
-        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to));
+        // 1. Địa chỉ người gửi & người nhận (To, CC, BCC) - hỗ trợ cả dấu phẩy và chấm phẩy (phong cách Outlook)
+        message.setFrom(new InternetAddress(from.trim()));
+        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(to.replace(';', ',')));
+        if (cc != null && !cc.trim().isEmpty()) {
+            message.setRecipients(Message.RecipientType.CC, InternetAddress.parse(cc.replace(';', ',')));
+        }
+        if (bcc != null && !bcc.trim().isEmpty()) {
+            message.setRecipients(Message.RecipientType.BCC, InternetAddress.parse(bcc.replace(';', ',')));
+        }
 
         // 2. Tiêu đề email (hỗ trợ Tiếng Việt UTF-8)
         message.setSubject(subject != null ? subject : "(Không có chủ đề)", "UTF-8");

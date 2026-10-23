@@ -91,10 +91,67 @@ public class SmtpClient {
         void sleep(long millis) throws InterruptedException;
     }
 
+    @FunctionalInterface
+    public interface SmtpProgressListener {
+        void onProgress(int percent, String message);
+    }
+
+    @FunctionalInterface
+    public interface RetryCountdownListener {
+        void onRetry(int attempt, int maxRetry, long delayMillis, String reason);
+    }
+
     private Sleeper sleeper = Thread::sleep;
+    private SmtpProgressListener progressListener;
+    private RetryCountdownListener retryCountdownListener;
 
     public void setSleeper(Sleeper sleeper) {
         this.sleeper = sleeper != null ? sleeper : Thread::sleep;
+    }
+
+    public void setProgressListener(SmtpProgressListener listener) {
+        this.progressListener = listener;
+    }
+
+    public void setRetryCountdownListener(RetryCountdownListener listener) {
+        this.retryCountdownListener = listener;
+    }
+
+    /**
+     * Kiểm tra kết nối và xác thực tới máy chủ SMTP
+     */
+    public static void testConnection(SmtpConfig config) throws Exception {
+        if (config == null) {
+            throw new IllegalArgumentException("Cấu hình SMTP không được để null!");
+        }
+        if (config.getHost() == null || config.getHost().trim().isEmpty()) {
+            throw new IllegalArgumentException("Thiếu cấu hình SMTP Host!");
+        }
+        if (config.getPort() <= 0) {
+            throw new IllegalArgumentException("Cổng SMTP Port không hợp lệ: " + config.getPort());
+        }
+        if (config.getUsername() == null || config.getUsername().trim().isEmpty()) {
+            throw new IllegalArgumentException("Thiếu tài khoản SMTP Username!");
+        }
+        if (config.getPassword() == null || config.getPassword().trim().isEmpty()) {
+            throw new IllegalArgumentException("Thiếu mật khẩu SMTP Password!");
+        }
+        SmtpClient client = new SmtpClient(config);
+        Session session = client.createSession();
+        Transport transport = session.getTransport("smtp");
+        try {
+            LoggerUtil.info("Đang kiểm tra kết nối & xác thực với máy chủ SMTP " + config.getHost() + ":" + config.getPort() + "...");
+            transport.connect(config.getHost(), config.getPort(), config.getUsername(), config.getPassword());
+            LoggerUtil.info("✔ Kiểm tra kết nối & xác thực SMTP thành công!");
+        } finally {
+            if (transport != null) {
+                try {
+                    transport.close();
+                    LoggerUtil.info("Đã đóng kết nối kiểm tra an toàn.");
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     /**
@@ -110,13 +167,23 @@ public class SmtpClient {
             throw new MessagingException("Không tìm thấy địa chỉ người nhận hợp lệ (To/CC/BCC).");
         }
 
+        if (progressListener != null) {
+            progressListener.onProgress(25, "Đang kết nối tới máy chủ SMTP " + config.getHost() + ":" + config.getPort() + "...");
+        }
+
         Transport transport = session.getTransport("smtp");
         try {
             LoggerUtil.info("Đang kết nối tới máy chủ SMTP: " + config.getHost() + "...");
             transport.connect();
+            if (progressListener != null) {
+                progressListener.onProgress(50, "Kết nối & xác thực thành công. Đang gửi dữ liệu email (SMTP DATA)...");
+            }
             LoggerUtil.info("Kết nối và xác thực thành công. Đang gửi dữ liệu email (SMTP DATA)...");
 
             transport.sendMessage(message, recipients);
+            if (progressListener != null) {
+                progressListener.onProgress(85, "Server đã nhận dữ liệu (250 OK). Đang hoàn tất phiên gửi...");
+            }
             LoggerUtil.info("Server đã nhận dữ liệu (250 OK - Kết thúc DATA '\\r\\n.\\r\\n').");
         } finally {
             if (transport != null) {
@@ -185,7 +252,14 @@ public class SmtpClient {
         while (true) {
             try {
                 sendEmail(session, message);
-                LoggerUtil.info("✔ GỬI EMAIL THÀNH CÔNG TỚI: " + config.getTo());
+                Address[] allRecipients = message.getAllRecipients();
+                String recDesc = (allRecipients != null && allRecipients.length > 0)
+                        ? java.util.Arrays.toString(allRecipients)
+                        : (config.getTo() != null ? config.getTo() : "người nhận");
+                if (progressListener != null) {
+                    progressListener.onProgress(100, "Gửi email thành công tới " + recDesc);
+                }
+                LoggerUtil.info("✔ GỬI EMAIL THÀNH CÔNG TỚI: " + recDesc);
                 return;
             } catch (Exception ex) {
                 attempt++;
@@ -195,6 +269,10 @@ public class SmtpClient {
                     long delayMillis = calculateBackoffWithJitterMillis(attempt, baseDelaySec, maxDelaySec);
                     LoggerUtil.warn(String.format("⚠ Lỗi tạm thời khi gửi email. Thử lại sau %d ms (Lần %d/%d). Nguyên nhân: %s",
                             delayMillis, attempt, maxRetry, ex.getMessage()));
+
+                    if (retryCountdownListener != null) {
+                        retryCountdownListener.onRetry(attempt, maxRetry, delayMillis, ex.getMessage());
+                    }
 
                     try {
                         this.sleeper.sleep(delayMillis);

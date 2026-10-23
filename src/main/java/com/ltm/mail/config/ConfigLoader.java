@@ -8,7 +8,9 @@ import com.ltm.mail.client.EmailMessageBuilder;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
@@ -100,6 +102,10 @@ public class ConfigLoader {
     }
 
     public static void validateConfig(SmtpConfig smtp) {
+        validateConfig(smtp, false);
+    }
+
+    public static void validateConfig(SmtpConfig smtp, boolean requireRecipient) {
         if (smtp.getHost() == null || smtp.getHost().trim().isEmpty()) {
             throw new IllegalArgumentException("Thiếu cấu hình SMTP Host (Smtp.Host)!");
         }
@@ -115,7 +121,7 @@ public class ConfigLoader {
         if (smtp.getFrom() == null || smtp.getFrom().trim().isEmpty()) {
             smtp.setFrom(smtp.getUsername());
         }
-        if (smtp.getTo() == null || smtp.getTo().trim().isEmpty()) {
+        if (requireRecipient && (smtp.getTo() == null || smtp.getTo().trim().isEmpty())) {
             throw new IllegalArgumentException("Thiếu địa chỉ email người nhận (Smtp.To)!");
         }
 
@@ -123,9 +129,42 @@ public class ConfigLoader {
         EmailMessageBuilder.validateHeaderValue("Host", smtp.getHost());
         EmailMessageBuilder.validateHeaderValue("Username", smtp.getUsername());
         EmailMessageBuilder.validateHeaderValue("From", smtp.getFrom());
-        EmailMessageBuilder.validateHeaderValue("To", smtp.getTo());
+        if (smtp.getTo() != null && !smtp.getTo().trim().isEmpty()) {
+            EmailMessageBuilder.validateHeaderValue("To", smtp.getTo());
+        }
+        if (smtp.getCc() != null && !smtp.getCc().trim().isEmpty()) {
+            EmailMessageBuilder.validateHeaderValue("Cc", smtp.getCc());
+        }
+        if (smtp.getBcc() != null && !smtp.getBcc().trim().isEmpty()) {
+            EmailMessageBuilder.validateHeaderValue("Bcc", smtp.getBcc());
+        }
         if (smtp.getSubject() != null) {
             EmailMessageBuilder.validateHeaderValue("Subject", smtp.getSubject());
         }
+    }
+
+    /**
+     * Lưu cấu hình vào file JSON (mặc định appsettings.json)
+     */
+    public static void saveConfig(AppConfig config) throws Exception {
+        saveConfig(config, DEFAULT_CONFIG_PATH);
+    }
+
+    /**
+     * Lưu cấu hình vào đường dẫn file chỉ định
+     */
+    public static void saveConfig(AppConfig config, String filePath) throws Exception {
+        if (config == null || config.getSmtp() == null) {
+            throw new IllegalArgumentException("Nội dung cấu hình không hợp lệ để lưu.");
+        }
+        File file = new File(filePath);
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
+        try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {
+            GSON.toJson(config, writer);
+        }
+        LoggerUtil.info("Đã lưu cấu hình thành công vào: " + filePath);
     }
 }

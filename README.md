@@ -40,19 +40,24 @@ Mail/
 │   └── Screenshot 2026-10-22 201543.png
 ├── src/
 │   ├── main/java/com/ltm/mail/
-│   │   ├── Main.java               # Entry point ứng dụng
+│   │   ├── Main.java               # Entry point ứng dụng (Mặc định mở GUI, hỗ trợ --cli)
+│   │   ├── ui/                     # Giao diện đồ họa Desktop Modern Outlook Style
+│   │   │   ├── MailAppFrame.java   # Cửa sổ chính (Ribbon Bar, Compose Form, Attachments, Log)
+│   │   │   ├── AccountSettingsDialog.java # Hộp thoại quản lý tài khoản & presets
+│   │   │   ├── ThemeManager.java   # Cấu hình FlatLaf Windows 11 & Chế độ Sáng/Tối
+│   │   │   └── AttachmentItem.java # Quản lý và tính dung lượng file đính kèm
 │   │   ├── client/
 │   │   │   ├── SmtpClient.java     # Quản lý Session, Transport, Send & Retry logic
-│   │   │   └── EmailMessageBuilder.java # Đóng gói MimeMessage multipart/mixed
+│   │   │   └── EmailMessageBuilder.java # Đóng gói MimeMessage multipart/mixed (To, CC, BCC)
 │   │   ├── config/
 │   │   │   ├── AppConfig.java
 │   │   │   ├── SmtpConfig.java
 │   │   │   ├── RetryConfig.java
-│   │   │   └── ConfigLoader.java   # Đọc và xác thực cấu hình JSON
+│   │   │   └── ConfigLoader.java   # Đọc, lưu (saveConfig) và xác thực cấu hình JSON
 │   │   └── util/
-│   │       ├── LoggerUtil.java     # Ghi log ra Console & File
+│   │       ├── LoggerUtil.java     # Ghi log ra Console, File & Real-time GUI Listener
 │   │       └── ExceptionClassifier.java # Phân loại lỗi Retryable vs Non-retryable
-│   └── test/java/com/ltm/mail/     # 10 unit tests kiểm thử tự động
+│   └── test/java/com/ltm/mail/     # Bộ kiểm thử tự động toàn diện (328 tests)
 └── README.md
 ```
 
@@ -108,18 +113,29 @@ mvn clean package
 ```
 
 ### 3. Chạy ứng dụng:
-- Cách 1: Sử dụng file JAR đã đóng gói:
-```powershell
-java -jar target/smtp-client-1.0.0.jar
-```
-- Hoặc truyền file cấu hình tuỳ chỉnh:
-```powershell
-java -jar target/smtp-client-1.0.0.jar duong/dan/toi/config.json
-```
-- Cách 2: Chạy trực tiếp qua Maven:
-```powershell
-mvn exec:java
-```
+- **Khởi chạy Giao diện Đồ họa Desktop (Modern Outlook Style)**:
+  - Chạy trực tiếp file JAR (hoặc double click vào file JAR trên Windows):
+  ```powershell
+  java -jar target/smtp-client-1.0.0.jar
+  ```
+  - Hoặc chỉ định rõ cờ `--gui`:
+  ```powershell
+  java -jar target/smtp-client-1.0.0.jar --gui
+  ```
+
+- **Chạy chế độ Dòng lệnh (CLI Mode - Tương thích ngược 100%)**:
+  - Chạy mặc định với `appsettings.json`:
+  ```powershell
+  java -jar target/smtp-client-1.0.0.jar --cli
+  ```
+  - Hoặc truyền file cấu hình tuỳ chỉnh:
+  ```powershell
+  java -jar target/smtp-client-1.0.0.jar duong/dan/toi/config.json
+  ```
+  - Chạy qua Maven:
+  ```powershell
+  mvn exec:java
+  ```
 
 ---
 

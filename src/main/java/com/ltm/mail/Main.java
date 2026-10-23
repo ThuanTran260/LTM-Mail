@@ -5,14 +5,17 @@ import com.ltm.mail.client.SmtpClient;
 import com.ltm.mail.config.AppConfig;
 import com.ltm.mail.config.ConfigLoader;
 import com.ltm.mail.config.SmtpConfig;
+import com.ltm.mail.ui.MailAppFrame;
 import com.ltm.mail.util.LoggerUtil;
 
 import javax.mail.Session;
 import javax.mail.internet.MimeMessage;
+import java.awt.GraphicsEnvironment;
 
 /**
  * Điểm khởi chạy ứng dụng SMTP Client Java:
- * Quản lý vòng đời: Đọc cấu hình -> Tạo Session -> Tạo MimeMessage -> Gửi & Retry -> Ghi log
+ * - Mặc định mở giao diện đồ họa Desktop (Modern Outlook Style) khi chạy không đối số.
+ * - Vẫn giữ nguyên 100% chế độ CLI khi truyền tham số file cấu hình hoặc flag --cli.
  */
 public class Main {
 
@@ -23,9 +26,42 @@ public class Main {
         } catch (Exception ignored) {
         }
 
-        printBanner();
+        boolean forceCli = false;
+        String configFile = "appsettings.json";
 
-        String configFile = (args.length > 0) ? args[0] : "appsettings.json";
+        if (args.length > 0) {
+            if ("--cli".equalsIgnoreCase(args[0])) {
+                forceCli = true;
+                if (args.length > 1) {
+                    configFile = args[1];
+                }
+            } else if ("--gui".equalsIgnoreCase(args[0])) {
+                forceCli = false;
+                if (GraphicsEnvironment.isHeadless()) {
+                    System.err.println("Lỗi: Không thể khởi chạy giao diện GUI trong môi trường headless (không có màn hình hiển thị).");
+                    System.exit(1);
+                }
+            } else {
+                // Tương thích ngược: Tham số truyền vào là file cấu hình
+                forceCli = true;
+                configFile = args[0];
+            }
+        }
+
+        if (!forceCli && !GraphicsEnvironment.isHeadless()) {
+            // Khởi chạy Giao diện đồ họa Desktop FlatLaf
+            MailAppFrame.launchGui();
+        } else {
+            // Chạy chế độ dòng lệnh (CLI)
+            runCli(configFile);
+        }
+    }
+
+    /**
+     * Chế độ thực thi dòng lệnh (CLI) truyền thống
+     */
+    public static void runCli(String configFile) {
+        printBanner();
 
         try {
             LoggerUtil.info("=== BẮT ĐẦU TIẾN TRÌNH GỬI EMAIL (SMTP CLIENT) ===");
@@ -33,12 +69,19 @@ public class Main {
 
             AppConfig appConfig = ConfigLoader.loadConfig(configFile);
             SmtpConfig smtpConfig = appConfig.getSmtp();
+            ConfigLoader.validateConfig(smtpConfig, true);
 
             // Hiển thị thông tin tổng quan cấu hình
             LoggerUtil.info("   - Máy chủ SMTP: " + smtpConfig.getHost() + ":" + smtpConfig.getPort());
             LoggerUtil.info("   - Bảo mật SSL/TLS: " + smtpConfig.isEnableSsl() + " (Auth: " + smtpConfig.getAuthType() + ")");
             LoggerUtil.info("   - Người gửi (From): " + smtpConfig.getFrom());
             LoggerUtil.info("   - Người nhận (To): " + smtpConfig.getTo());
+            if (smtpConfig.getCc() != null && !smtpConfig.getCc().trim().isEmpty()) {
+                LoggerUtil.info("   - Đồng kính gửi (CC): " + smtpConfig.getCc());
+            }
+            if (smtpConfig.getBcc() != null && !smtpConfig.getBcc().trim().isEmpty()) {
+                LoggerUtil.info("   - Kính gửi ẩn (BCC): " + smtpConfig.getBcc());
+            }
             LoggerUtil.info("   - Chủ đề (Subject): " + smtpConfig.getSubject());
             LoggerUtil.info("   - Số file đính kèm: " + (smtpConfig.getAttachmentPaths() != null ? smtpConfig.getAttachmentPaths().size() : 0));
 

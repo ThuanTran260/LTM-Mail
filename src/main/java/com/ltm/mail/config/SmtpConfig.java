@@ -34,6 +34,12 @@ public class SmtpConfig {
     @SerializedName("To")
     private String to;
 
+    @SerializedName("Cc")
+    private String cc;
+
+    @SerializedName("Bcc")
+    private String bcc;
+
     @SerializedName("Subject")
     private String subject;
 
@@ -113,6 +119,22 @@ public class SmtpConfig {
         this.to = to;
     }
 
+    public String getCc() {
+        return cc;
+    }
+
+    public void setCc(String cc) {
+        this.cc = cc;
+    }
+
+    public String getBcc() {
+        return bcc;
+    }
+
+    public void setBcc(String bcc) {
+        this.bcc = bcc;
+    }
+
     public String getSubject() {
         return subject;
     }
@@ -155,6 +177,8 @@ public class SmtpConfig {
                 ", authType='" + authType + '\'' +
                 ", from='" + from + '\'' +
                 ", to='" + to + '\'' +
+                ", cc='" + cc + '\'' +
+                ", bcc='" + bcc + '\'' +
                 ", subject='" + subject + '\'' +
                 ", attachmentsCount=" + (attachmentPaths != null ? attachmentPaths.size() : 0) +
                 ", retry=" + retry +
